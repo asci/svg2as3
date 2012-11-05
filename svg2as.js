@@ -1,9 +1,9 @@
 var fs = require('fs');
 
 var et = require('elementtree');
-var packag = process.argv[3].split('/')[process.argv[3].split('/').length - 1];
+var packag = process.argv[3].split('/')[process.argv[3].split('/').length - 1] || process.argv[4];
 
-var baseHeader = 	"package " + packag + " {\n",
+var baseHeader = 	"package " + packag + ".libs {\n",
 	imports = 		"import flash.text.TextField;\n" + 
 					"import flash.text.TextFormat;\n" + 
 					"import flash.events.MouseEvent;\n" + 
@@ -18,12 +18,20 @@ fs.readFile(process.argv[2], function (err, data) {
 	// 	if (err) throw err;
 	// 	console.log('It\'s saved!');
 	// });
-	var classes = doc.findall('*/g'),
-		offsetY = parseFloat(doc._root._children[doc._root._children.length - 1].attrib.transform.split(',')[1]),
-		offsetX = parseFloat(doc._root._children[doc._root._children.length - 1].attrib.transform.split('(')[1]);
-
+	var classes = doc.findall('*/g');
+	if (doc._root._children[doc._root._children.length - 1].attrib && doc._root._children[doc._root._children.length - 1].attrib.transform) {
+		var offsetY = parseFloat(doc._root._children[doc._root._children.length - 1].attrib.transform.split(',')[1]),
+		offsetX = parseFloat(doc._root._children[doc._root._children.length - 1].attrib.transform.split('(')[1]);		
+	} else {
+		offsetY = 0;
+		offsetX = 0;
+	}
+	//TODO Make unexcist dirs!!
+	fs.mkdir(process.argv[3] + 'libs/', function  (err) {
+		if (err) console.log(err.message);
+	});
 	for (var i = 0, len = classes.length; i < len; i++) {
-		fs.writeFile(process.argv[3] + '/' + classes[i].attrib.id + '.as', createASFile(classes[i], offsetX, offsetY, process.argv[3]), function (err) {
+		fs.writeFile(process.argv[3] + 'libs/' + classes[i].attrib.id + '.as', createASFile(classes[i], offsetX, offsetY, process.argv[3]), function (err) {
 			if (err) throw err;
 			console.log('It\'s saved!');
 		});
@@ -91,7 +99,7 @@ var createSpriteClass = function (classNode, offsetX_, offsetY_, visible, path) 
 		if (classNode._children[i].tag == 'image') {
 			var img64 = classNode._children[i].attrib['xlink:href'];
 			img64 = img64.split(',')[1];
-			fs.writeFileSync(path + '/' + classNode._children[i].attrib.id + '.png', new Buffer(img64, 'base64'));
+			fs.writeFileSync(path + '/libs/' + classNode._children[i].attrib.id + '.png', new Buffer(img64, 'base64'));
 			variables += '[Embed(source="' + classNode._children[i].attrib.id + '.png' + '")]\n';
 			variables += "private var " + classNode._children[i].attrib.id.toUpperCase() + ":Class;\n";
 			variables += ('public var ' + varName + ':Bitmap = new ' + classNode._children[i].attrib.id.toUpperCase() + '();\n');
@@ -149,8 +157,11 @@ var createRect = function (rectNode, offsetX, offsetY) {
 		}
 	var x = (+rectNode.attrib.x + offsetX + selfOffsetX),
 		y = (+rectNode.attrib.y + offsetY + selfOffsetY),
-		beginFill = name + '.graphics.beginFill(0x' + fillColor + ', ' + style['fill-opacity'] + ');\n',
-		lineStyle = name + '.graphics.lineStyle(' + style['stroke-width'] + ', 0x' + strokeColor + ', '+style['stroke-opacity'] + ');\n';
+		beginFill = name + '.graphics.beginFill(0x' + fillColor + ', ' + style['fill-opacity'] + ');\n';
+		var lineStyle = '';
+		if (style['stroke-width']) {
+			lineStyle = name + '.graphics.lineStyle(' + style['stroke-width'] + ', 0x' + strokeColor + ', ' + (style['stroke-opacity'] || 1) + ');\n';			
+		}
 		if (rectNode.attrib.ry) {
 			var drawRect = name + '.graphics.drawRoundRect(' + x + ', ' + y  + ', ' + rectNode.attrib.width + ', ' + rectNode.attrib.height + ', ' +rectNode.attrib.ry + ');\n';
 		} else {
@@ -174,14 +185,15 @@ var createDynamycText = function (textNode, offsetX, offsetY) {
 		selfOffsetY = 0;
 	}
 
-	var x = (+textNode.attrib.x + offsetX + selfOffsetX),
-		y = (+textNode.attrib.y + offsetY + selfOffsetY);
+	var x = (+textNode.attrib.x + offsetX + selfOffsetX - 2),
+		y = (+textNode.attrib.y + offsetY + selfOffsetY - 2);
 
 	var setText = name + '.text ="' + text + '";\n';
 	var setParams = name + '.selectable = false;\n';
 	var setPos = 	name + ".x = " + x + ';\n' + 
-					name + ".y = " + y + ' - ' + name + '.textHeight;\n' +
-					name + ".width = " + name + '.textWidth;\n'
+					name + ".y = " + y + ' - ' + name + '.textHeight + ' + name + ' .getLineMetrics(0).descent;\n' +
+					name + ".width = " + name + '.textWidth + 4;\n' + 
+					name + ".height = " + name + '.textHeight + ' + name + '.getLineMetrics(0).descent;\n'
 	var setTf = 'var tf:TextFormat = ' + name + ".getTextFormat();\n" + 
 				'tf.font = "' + style['font-family'] + '";\n' +
 				'tf.size = ' + parseInt(style['font-size']) + ';\n' +  
