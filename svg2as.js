@@ -1,6 +1,11 @@
 var fs = require('fs'),
 	et = require('elementtree');
 
+if (process.argv[2] === '--help') {
+	console.log('usage:\nnode svg2as.js file.svg path/to/output/as/files [package]\n"libs" package will be add automaticly ');
+	process.exit();
+}
+
 var outputPath = process.argv[3];
 if (outputPath.charAt(outputPath.length - 1) === '/') {
 	outputPath = outputPath.slice(0, outputPath.length - 1);
